@@ -3,38 +3,49 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 class SocialMatchingDataset(Dataset):
-    def __init__(self, interactions_file: str):
-        """
-        Loads the Positive interaction for the 2 tower model.
-        In - batch negative sampling handles the negatives dynamically during training.
-        """
-        # Load the interaction CSV into memry.
-        self.interaction = pd.read_csv(interactions_file)
-
-        # Ensure we hava the correct columns (adjust names based on your generation script)
-        if 'query_id' not in self.interaction.columns or 'candidate_id' not in self.interaction.columns:
-            raise ValueError("INteractions CSV must contain 'query_id' and 'candidate_id' columns.")
+    def __init__(self, interactions_file: str, features_file: str):
+        # 1. Load the interaction signals
+        self.interactions = pd.read_csv(interactions_file)
+        
+        # 2. Load features and set user_id as the index for O(1) mathematical lookup time
+        self.features = pd.read_csv(features_file).set_index('user_id')
         
     def __len__(self):
-        """Returns the total number of positive interactions."""
-        return len(self.interaction)
-    
-    def __getitem__(self, idx : int) -> dict:
-        """Fetches a single interaction pair and converts it to a PyTorch tensor."""
-        row = self.interaction.iloc[idx]
+        return len(self.interactions)
+        
+    def __getitem__(self, idx: int) -> dict:
+        row = self.interactions.iloc[idx]
+        
+        q_id = int(row['query_id'])
+        c_id = int(row['candidate_id'])
+        
+        # Pull the dense and sparse features for the query user
+        q_feats = self.features.loc[q_id]
+        
+        # Pull the dense and sparse features for the candidate user
+        c_feats = self.features.loc[c_id]
+        
         return {
-            "query_id" : torch.tensor(row['query_id'], dtype = torch.long),
-            "candidate_id" : torch.tensor(row['candidate_id'], dtype = torch.long)
+            # Query Tensors
+            "query_id": torch.tensor(q_id, dtype=torch.long),
+            "query_age": torch.tensor(q_feats['age_norm'], dtype=torch.float32),
+            "query_city": torch.tensor(int(q_feats['city_id']), dtype=torch.long),
+            
+            # Candidate Tensors
+            "candidate_id": torch.tensor(c_id, dtype=torch.long),
+            "candidate_age": torch.tensor(c_feats['age_norm'], dtype=torch.float32),
+            "candidate_city": torch.tensor(int(c_feats['city_id']), dtype=torch.long)
         }
-    
 
-# quick test to ensure that the architecture works locally
+# Quick validation test
 if __name__ == "__main__":
-    #Point to the data just versione with DVC
-    dataset = SocialMatchingDataset(interactions_file="data/raw/interactions.csv")
-    # create the DataLoader to feed the model in batches.
-    dataloader  = DataLoader(dataset, batch_size=4, shuffle=True)
-    # Fetch a single batch to verify
-    sample_batch = next(iter(dataloader))
-    print("Query Batch:", sample_batch['query_id'])
-    print("Candidate batch:", sample_batch['candidate_id'])
+    dataset = SocialMatchingDataset(
+        interactions_file="data/raw/interactions.csv", 
+        features_file="data/raw/users_features.csv"
+    )
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
+    batch = next(iter(dataloader))
+    
+    print("Query IDs:   ", batch['query_id'])
+    print("Query Ages:  ", batch['query_age'])
+    print("Query Cities:", batch['query_city'])

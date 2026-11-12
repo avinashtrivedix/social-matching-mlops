@@ -1,0 +1,5 @@
+outs:
+- md5: bf1e7675b1ac91ed78d10a681b9bb281
+  size: 5122085
+  hash: md5
+  path: two_tower_baseline.pth

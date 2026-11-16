@@ -1,0 +1,5 @@
+outs:
+- md5: 3535c228cc9d9f98fd1111525ca3dc7e
+  size: 2701673
+  hash: md5
+  path: two_tower_multimodal.pth
